@@ -1,0 +1,19 @@
+FROM registry.access.redhat.com/ubi9/python-312
+
+# Switch to root user for system package installation
+USER 0
+
+# Install system dependencies for python-magic
+RUN dnf install -y file-libs file
+
+# Switch back to the default python user (typically 1001)
+USER 1001
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["python", "scraper.py"]

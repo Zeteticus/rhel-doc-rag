@@ -1,0 +1,50 @@
+version: '3'
+
+services:
+  scraper:
+    build: 
+      context: ./scraper
+      dockerfile: Containerfile
+    volumes:
+      - ./data:/app/data
+    environment:
+      - OUTPUT_DIR=/app/data/documents
+    restart: on-failure
+
+  vector_db:
+    build:
+      context: ./vector_db
+      dockerfile: Containerfile
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    environment:
+      - CHROMA_DB_DIR=/app/data/chroma
+    restart: always
+
+  rag_service:
+    build:
+      context: ./rag_service
+      dockerfile: Containerfile
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - vector_db
+    environment:
+      - VECTOR_DB_HOST=vector_db
+      - VECTOR_DB_PORT=8000
+    restart: always
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Containerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - rag_service
+    environment:
+      - RAG_SERVICE_HOST=rag_service
+      - RAG_SERVICE_PORT=5000
+    restart: always
