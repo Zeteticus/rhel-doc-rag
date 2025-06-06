@@ -1,0 +1,8 @@
+fastapi==0.103.1
+uvicorn==0.23.2
+# Using compatible PyTorch version for Python 3.12
+torch>=2.2.0
+# If using local models
+transformers>=4.35.0
+# If using MCP
+httpx>=0.25.0

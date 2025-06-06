@@ -1,50 +1,72 @@
 version: '3'
 
 services:
-  scraper:
-    build: 
-      context: ./scraper
-      dockerfile: Containerfile
+  # Vector database - uses Qdrant
+  vector-db:
+    image: docker.io/qdrant/qdrant:v1.4.1
     volumes:
-      - ./data:/app/data
-    environment:
-      - OUTPUT_DIR=/app/data/documents
-    restart: on-failure
-
-  vector_db:
-    build:
-      context: ./vector_db
-      dockerfile: Containerfile
-    volumes:
-      - ./data:/app/data
+      - ./vector_data:/qdrant/storage
     ports:
-      - "8000:8000"
-    environment:
-      - CHROMA_DB_DIR=/app/data/chroma
-    restart: always
+      - "6333:6333"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:6333/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
 
-  rag_service:
+  # Data processor - waits for vector-db to be ready
+  data-processor:
     build:
-      context: ./rag_service
+      context: ./data-processor
       dockerfile: Containerfile
     volumes:
-      - ./data:/app/data
+      - ./downloaded_docs:/data/documents
     depends_on:
-      - vector_db
+      vector-db:
+        condition: service_healthy
     environment:
-      - VECTOR_DB_HOST=vector_db
-      - VECTOR_DB_PORT=8000
-    restart: always
+      - VECTOR_DB_HOST=vector-db
+      - VECTOR_DB_PORT=6333
+    # Only run once to load data, then exit
+    restart: "no"
 
-  web:
+  # LLM service - for generating responses
+  llm-service:
     build:
-      context: ./web
+      context: ./llm-service
       dockerfile: Containerfile
     ports:
       - "8080:8080"
-    depends_on:
-      - rag_service
     environment:
-      - RAG_SERVICE_HOST=rag_service
-      - RAG_SERVICE_PORT=5000
-    restart: always
+      - MCP_SERVER_URL=http://localhost:8090
+    # If using local models
+    volumes:
+      - ./models:/app/models
+
+  # API service - waits for both vector-db and llm-service
+  api-service:
+    build:
+      context: ./api-service
+      dockerfile: Containerfile
+    ports:
+      - "5000:5000"
+    depends_on:
+      vector-db:
+        condition: service_healthy
+      llm-service:
+        condition: service_started
+    environment:
+      - VECTOR_DB_HOST=vector-db
+      - VECTOR_DB_PORT=6333
+      - LLM_SERVICE_HOST=llm-service
+      - LLM_SERVICE_PORT=8080
+
+  # Web interface - waits for API service
+  web-interface:
+    build:
+      context: ./web-interface
+      dockerfile: Containerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api-service

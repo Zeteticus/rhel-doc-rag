@@ -1,1 +1,0 @@
-# rhel-doc-rag

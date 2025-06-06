@@ -1,0 +1,4 @@
+FROM docker.io/qdrant/qdrant:v1.4.1
+
+# Just copy our config
+COPY config.yaml /qdrant/config/production.yaml

@@ -1,0 +1,19 @@
+FROM registry.access.redhat.com/ubi9/python-312:latest
+
+WORKDIR /app
+
+# Install system dependencies needed for Python packages
+# Using package names available in RHEL 9 repositories
+USER 0
+RUN dnf install -y file file-libs gcc-c++ python3-devel libxml2-devel libxslt-devel && \
+    dnf clean all
+USER 1001
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy processing script
+COPY process_docs.py .
+
+# Run the processor
+CMD ["python", "process_docs.py", "--docs-dir", "/data/documents", "--vector-db-host", "vector-db", "--vector-db-port", "6333"]

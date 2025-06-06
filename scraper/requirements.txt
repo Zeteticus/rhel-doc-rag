@@ -1,5 +1,0 @@
-requests
-beautifulsoup4
-trafilatura
-tqdm
-python-magic==0.4.27

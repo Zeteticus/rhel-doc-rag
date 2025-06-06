@@ -1,0 +1,6 @@
+podman build -t rhel-doc-rag_vector-db ./vector-db
+podman build -t rhel-doc-rag_data-processor ./data-processor
+podman build -t rhel-doc-rag_llm-service ./llm-service
+podman build -t rhel-doc-rag_api-service ./api-service
+podman build -t rhel-doc-rag_web-interface ./web-interface
+

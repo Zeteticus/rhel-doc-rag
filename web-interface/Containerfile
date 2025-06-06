@@ -1,0 +1,30 @@
+FROM registry.access.redhat.com/ubi9/nodejs-18:latest as build
+
+# Fix permissions for npm
+USER 0
+RUN mkdir -p /opt/app-root/src/app && \
+    chown -R 1001:0 /opt/app-root/src/app && \
+    chmod -R g=u /opt/app-root/src/app
+USER 1001
+
+WORKDIR /opt/app-root/src/app
+
+# Copy package files and install dependencies
+COPY --chown=1001:0 package.json ./
+RUN npm install
+
+# Copy source code
+COPY --chown=1001:0 . .
+
+# Build app
+RUN npm run build
+
+# Serve with Nginx
+FROM registry.access.redhat.com/ubi9/nginx-120:latest
+
+# Copy built app to nginx
+COPY --from=build /opt/app-root/src/app/build /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

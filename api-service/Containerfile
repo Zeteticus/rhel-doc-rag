@@ -1,0 +1,14 @@
+FROM registry.access.redhat.com/ubi9/python-312:latest
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy API code
+COPY main.py .
+
+# Run the API server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+
