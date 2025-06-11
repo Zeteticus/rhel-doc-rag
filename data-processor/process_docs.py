@@ -3,14 +3,62 @@ import argparse
 from pathlib import Path
 import re
 import html2text
-from sentence_transformers import SentenceTransformer
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 import magic
 import pypdf
+import hashlib
+import numpy as np
 
-# Simple document loading functionality without dependencies
+# Simple embedding function that doesn't require PyTorch
+def simple_embedding(text, dimension=384):
+    """Generate a simple deterministic embedding from text (not for production use)"""
+    # Hash the text to get a deterministic seed
+    text_hash = hashlib.md5(text.encode()).digest()
+    np.random.seed(int.from_bytes(text_hash[:4], byteorder='little'))
+    
+    # Generate a random vector (this is NOT a good embedding, just for testing)
+    embedding = np.random.randn(dimension)
+    # Normalize to unit length
+    return embedding / np.linalg.norm(embedding)
+
+# Simple text splitter implementation
+def simple_text_splitter(text, chunk_size=1000, chunk_overlap=200):
+    """Split text into chunks of approximately chunk_size characters with overlap."""
+    if not text:
+        return []
+        
+    chunks = []
+    start = 0
+    text_len = len(text)
+    
+    while start < text_len:
+        # Find a good place to end this chunk (preferably at paragraph or sentence end)
+        end = min(start + chunk_size, text_len)
+        
+        # If we're not at the end of the text, try to find a paragraph break
+        if end < text_len:
+            # Look for paragraph break
+            paragraph_break = text.rfind('\n\n', start, end)
+            
+            # If found and not too far back, use it
+            if paragraph_break != -1 and paragraph_break > start + chunk_size // 2:
+                end = paragraph_break + 2
+            else:
+                # Look for sentence break (period followed by space)
+                sentence_break = text.rfind('. ', start, end)
+                if sentence_break != -1 and sentence_break > start + chunk_size // 2:
+                    end = sentence_break + 2
+        
+        # Add this chunk
+        chunks.append(text[start:end])
+        
+        # Move to next chunk with overlap
+        start = max(start, end - chunk_overlap)
+    
+    return chunks
+
+# Simple document loading functionality
 def load_document(file_path):
     """Load document content based on file type."""
     mime = magic.Magic(mime=True)
@@ -52,14 +100,11 @@ def load_document(file_path):
 
 def process_documents(docs_dir, vector_db_host, vector_db_port):
     print(f"Connecting to Qdrant at {vector_db_host}:{vector_db_port}")
-    # Initialize model and text splitter
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     
     # Connect to Qdrant
     client = QdrantClient(host=vector_db_host, port=vector_db_port)
     
-    # Create collection
+    # Create collection - note we're using dimension 384 to match the normal sentence transformer
     client.recreate_collection(
         collection_name="redhat_docs",
         vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE)
@@ -80,11 +125,12 @@ def process_documents(docs_dir, vector_db_host, vector_db_port):
             document_text = load_document(file_path)
             if document_text:
                 # Split text into chunks
-                chunks = text_splitter.split_text(document_text)
+                chunks = simple_text_splitter(document_text)
                 
                 # Store in Qdrant
                 for i, chunk in enumerate(chunks):
-                    embedding = model.encode(chunk).tolist()
+                    # Generate simple embedding (not a good one, but doesn't require PyTorch)
+                    embedding = simple_embedding(chunk).tolist()
                     
                     client.upsert(
                         collection_name="redhat_docs",
